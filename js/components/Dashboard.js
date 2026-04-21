@@ -69,7 +69,7 @@ export async function loadDashboardData() {
     balance:  balance - savingsDeposit,
     income,
     expense,
-    savings:  (balance * 0.114) + savingsDeposit
+    savings: savingsDeposit
   });
 }
 
