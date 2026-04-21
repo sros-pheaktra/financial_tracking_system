@@ -60,11 +60,6 @@ function authHTML() {
         </button>
         <p class="auth-switch">Already have an account? <a id="show-login">Sign in</a></p>
       </div>
-
-      <!-- Demo hint -->
-      <div style="margin-top:20px;padding:12px;background:var(--bg-input);border-radius:var(--radius-sm);font-size:12px;color:var(--text-muted);text-align:center">
-        🚀 Demo: use any email + password (min 6 chars) to create an account
-      </div>
     </div>
   </div>`;
 }
