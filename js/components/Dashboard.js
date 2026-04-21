@@ -64,7 +64,13 @@ export async function loadDashboardData() {
   State.set('cashFlow', cashFlow || []);
   State.set('spendingBreakdown', breakdown);
   State.set('budgets', budgets || []);
-  State.set('stats', { balance, income, expense, savings: balance * 0.114 });
+  const savingsDeposit = State.get('savingsDeposit') || 0;
+  State.set('stats', {
+    balance:  balance - savingsDeposit,
+    income,
+    expense,
+    savings:  (balance * 0.114) + savingsDeposit
+  });
 }
 
 // ── Module-level container ref + one-time refresh listener ───
@@ -118,6 +124,7 @@ function patchStatCards() {
 function dashboardHTML() {
   const s = computeStats();
   const profile = State.get('profile');
+  console.log(s)
 
   return `
   <div class="page">
@@ -131,7 +138,31 @@ function dashboardHTML() {
         '#F43F5E', trendDownIcon(), 'expense-chart')}
       ${statCard('Savings Growth', fmtShort(s.savings),
         `Goal: ${fmt(profile?.savings_goal || 5000)}`, 'neutral',
-        '#F59E0B', piggyIcon(), 'savings-chart')}
+        '#F59E0B', piggyIcon(), 'savings-chart', true)}
+    </div>
+
+    <!-- Add Savings Modal -->
+    <div id="savings-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
+      <div style="background:var(--bg-card);border-radius:16px;padding:28px 28px 24px;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.25)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <div>
+            <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin:0">Add to Savings</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0">Amount will be moved from your balance</p>
+          </div>
+          <button id="savings-modal-close" style="background:var(--bg-page);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px;color:var(--text-secondary);display:flex;align-items:center;justify-content:center">&times;</button>
+        </div>
+        <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">Amount</label>
+        <div style="display:flex;align-items:center;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg-page)">
+          <span style="padding:0 12px;font-size:15px;color:var(--text-muted);border-right:1.5px solid var(--border);height:42px;display:flex;align-items:center">$</span>
+          <input id="savings-amount-input" type="number" min="0" placeholder="0.00"
+            style="flex:1;border:none;outline:none;background:transparent;padding:0 12px;height:42px;font-size:15px;font-family:var(--font-display);color:var(--text-primary)" />
+        </div>
+        <p id="savings-modal-error" style="color:#F43F5E;font-size:12px;margin:6px 0 0;min-height:16px"></p>
+        <div style="display:flex;gap:10px;margin-top:18px">
+          <button id="savings-modal-cancel" style="flex:1;height:40px;border:1.5px solid var(--border);background:transparent;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;color:var(--text-secondary)">Cancel</button>
+          <button id="savings-modal-confirm" style="flex:1;height:40px;background:#F59E0B;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;color:#fff">Confirm</button>
+        </div>
+      </div>
     </div>
 
     <!-- Chart Grid -->
@@ -228,8 +259,7 @@ function dashboardHTML() {
   </div>`;
 }
 
-function statCard(label, value, sub, trend, color, icon, chartId) {
-  const isDown = trend === 'down';
+function statCard(label, value, sub, trend, color, icon, chartId, showSaveBtn = false) {
   return `
   <div class="stat-card">
     <div class="stat-card-header">
@@ -238,7 +268,17 @@ function statCard(label, value, sub, trend, color, icon, chartId) {
     </div>
     <h2>${value}</h2>
     <span class="stat-badge ${trend}">${sub}</span>
-    <canvas class="mini-chart" id="${chartId}" style="width:100%;height:44px;display:block"></canvas>
+    ${showSaveBtn ? `
+    <button id="add-savings-btn" style="
+      margin-top:10px;width:100%;height:32px;
+      background:${color}18;border:1.5px solid ${color}44;
+      border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;
+      color:${color};display:flex;align-items:center;justify-content:center;gap:5px;
+      transition:background 0.15s">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Savings
+    </button>` : ''}
+    <canvas class="mini-chart" id="${chartId}" style="width:100%;height:44px;display:block;margin-top:${showSaveBtn ? '8px' : '0'}"></canvas>
   </div>`;
 }
 
@@ -247,6 +287,47 @@ function bindDashboard() {
   // Add transaction
   document.getElementById('add-tx-btn')?.addEventListener('click', () => openTransactionModal());
   document.getElementById('add-tx-hbtn')?.addEventListener('click', () => openTransactionModal());
+
+  // Savings modal
+  const overlay   = document.getElementById('savings-modal-overlay');
+  const input     = document.getElementById('savings-amount-input');
+  const errorEl   = document.getElementById('savings-modal-error');
+
+  function openSavingsModal() {
+    if (input)   input.value = '';
+    if (errorEl) errorEl.textContent = '';
+    if (overlay) { overlay.style.display = 'flex'; input?.focus(); }
+  }
+  function closeSavingsModal() {
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  document.getElementById('add-savings-btn')?.addEventListener('click', openSavingsModal);
+  document.getElementById('savings-modal-close')?.addEventListener('click', closeSavingsModal);
+  document.getElementById('savings-modal-cancel')?.addEventListener('click', closeSavingsModal);
+  overlay?.addEventListener('click', e => { if (e.target === overlay) closeSavingsModal(); });
+
+  document.getElementById('savings-modal-confirm')?.addEventListener('click', () => {
+    const val = parseFloat(input?.value);
+    const stats = State.get('stats') || {};
+    if (!val || val <= 0) {
+      if (errorEl) errorEl.textContent = 'Please enter a valid amount.';
+      return;
+    }
+    if (val > stats.balance) {
+      if (errorEl) errorEl.textContent = 'Amount exceeds available balance.';
+      return;
+    }
+    const prev = State.get('savingsDeposit') || 0;
+    State.set('savingsDeposit', prev + val);
+    closeSavingsModal();
+    // Refresh stats + cards
+    loadDashboardData().then(() => {
+      patchStatCards();
+      renderCharts();
+    });
+    toast?.success?.(`$${val.toLocaleString()} moved to savings!`);
+  });
   // Filter tabs
   document.querySelectorAll('.filter-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -272,19 +353,13 @@ function renderCharts() {
   const flow   = State.get('cashFlow');
   const labels = flow.map(f => f.month);
 
-  // Income vs Expenses line chart
+  // Income vs Expenses — custom renderer matching reference design
   const iec = document.getElementById('income-expense-chart');
   if (iec) {
-    drawLineChart(iec,
-      [
-        { values: flow.map(f => f.income),  color: 'var(--income)' },
-        { values: flow.map(f => f.expense), color: 'var(--expense)' }
-      ],
-      labels, { minZero: true }
-    );
+    drawIncomeExpenseChart(iec, flow);
     const avgNet = flow.reduce((s, f) => s + f.net, 0) / (flow.length || 1);
     const el = document.getElementById('avg-net');
-    if (el) el.textContent = '+' + fmt(avgNet);
+    if (el) el.textContent = (avgNet >= 0 ? '+' : '') + fmt(avgNet);
   }
 
   // Cash flow bar chart
@@ -298,20 +373,297 @@ function renderCharts() {
     drawBarChart(cfc,
       flow.map(f => f.net),
       labels,
-      flow.map(() => '#FF7900 '),
-      { highlight: flow.length - 1 }
+      flow.map(() => '#FF4444'),
+      { highlight: flow.length - 1, id: 'cashflow-chart' }
     );
   }
 
   // Mini sparklines
   const incomeData  = flow.map(f => f.income);
   const expenseData = flow.map(f => f.expense);
-  const s = State.get('stats');
   drawMiniLine(document.getElementById('balance-chart'),  incomeData, '#6366F1');
   drawMiniLine(document.getElementById('income-chart'),   incomeData, '#10B981');
   drawMiniLine(document.getElementById('expense-chart'),  expenseData, '#F43F5E');
   drawMiniLine(document.getElementById('savings-chart'),
     incomeData.map(v => v * 0.114), '#F59E0B');
+}
+
+// ── Income vs Expenses Chart — with hover tooltip & crosshair ─
+function drawIncomeExpenseChart(canvas, flow) {
+  if (!canvas || !flow.length) return;
+
+  // Remove any existing listener clone to avoid stacking handlers
+  const fresh = canvas.cloneNode(true);
+  canvas.parentNode.replaceChild(fresh, canvas);
+  canvas = fresh;
+  // Re-bind the id so renderCharts can still find it
+  canvas.id = 'income-expense-chart';
+
+  const dpr = window.devicePixelRatio || 1;
+  const W   = canvas.offsetWidth;
+  const H   = canvas.offsetHeight || 200;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const css       = prop => getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
+  const cardBg    = () => css('--bg-card')       || '#fff';
+  const textMain  = () => css('--text-primary')  || '#0F1117';
+  const textMuted = () => css('--text-muted')    || '#9CA3AF';
+  const textSec   = () => css('--text-secondary')|| '#6B7280';
+  const gridColor = () => css('--border')        || '#E8E9EF';
+
+  const pad = { top: 12, right: 16, bottom: 30, left: 44 };
+  const pw  = W - pad.left - pad.right;
+  const ph  = H - pad.top  - pad.bottom;
+
+  const allVals = [...flow.map(f => f.income), ...flow.map(f => f.expense)];
+  const dataMax  = Math.max(...allVals, 0);
+  const tickCount = 5;
+  const step      = dataMax / tickCount || 1;
+  const yMax      = dataMax || step * tickCount;
+  const yTicks    = Array.from({ length: tickCount + 1 }, (_, i) => i * step);
+
+  function xOf(i) { return pad.left + (i / (flow.length - 1)) * pw; }
+  function yOf(v) { return pad.top  + ph * (1 - v / yMax); }
+
+  // ── Core draw (static layer) ──────────────────────────────
+  function drawBase() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Grid & Y labels
+    ctx.save();
+    ctx.font      = `11px 'DM Sans', sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = textMuted();
+    yTicks.forEach(v => {
+      const y = yOf(v);
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = gridColor();
+      ctx.lineWidth   = 1;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + pw, y); ctx.stroke();
+      ctx.restore();
+      const label = v === 0 ? '0k' : v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + 'k' : v.toFixed(0);
+      ctx.fillText(label, pad.left - 6, y + 4);
+    });
+    ctx.restore();
+
+    // X labels
+    ctx.save();
+    ctx.font      = `11px 'DM Sans', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = textMuted();
+    flow.forEach((f, i) => ctx.fillText(f.month, xOf(i), H - 6));
+    ctx.restore();
+
+    drawDataset(flow.map(f => f.expense), '#EF4444');
+    drawDataset(flow.map(f => f.income),  '#22C55E');
+  }
+
+  function smoothPath(pts) {
+    if (pts.length < 2) return;
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i+1].x) / 2;
+      ctx.bezierCurveTo(mx, pts[i].y, mx, pts[i+1].y, pts[i+1].x, pts[i+1].y);
+    }
+  }
+
+  function drawDataset(values, color, highlightIdx = -1) {
+    const pts = values.map((v, i) => ({ x: xOf(i), y: yOf(v) }));
+
+    // Fill
+    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ph);
+    grad.addColorStop(0, color + '28');
+    grad.addColorStop(1, color + '00');
+    ctx.save();
+    ctx.beginPath();
+    smoothPath(pts);
+    ctx.lineTo(pts[pts.length-1].x, pad.top + ph);
+    ctx.lineTo(pts[0].x, pad.top + ph);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+
+    // Stroke
+    ctx.save();
+    ctx.beginPath();
+    smoothPath(pts);
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 2.5;
+    ctx.lineJoin    = 'round';
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+    ctx.restore();
+
+    // Dots
+    pts.forEach((p, i) => {
+      const isHot = i === highlightIdx;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, isHot ? 6 : 4.5, 0, Math.PI * 2);
+      ctx.fillStyle   = color;
+      ctx.fill();
+      ctx.lineWidth   = isHot ? 3 : 2.5;
+      ctx.strokeStyle = cardBg();
+      ctx.stroke();
+    });
+  }
+
+  // ── Hover overlay ─────────────────────────────────────────
+  function drawHover(idx) {
+    drawBase();
+    if (idx < 0 || idx >= flow.length) return;
+
+    const f  = flow[idx];
+    const x  = xOf(idx);
+
+    // Vertical crosshair line
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = textSec() + '88';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, pad.top + ph);
+    ctx.stroke();
+    ctx.restore();
+
+    // Re-draw datasets with highlighted dot
+    drawDataset(flow.map(f => f.expense), '#EF4444', idx);
+    drawDataset(flow.map(f => f.income),  '#22C55E', idx);
+
+    // ── Tooltip box ──────────────────────────────────────────
+    const INCOME_COLOR  = '#22C55E';
+    const EXPENSE_COLOR = '#EF4444';
+    const NET_POSITIVE  = f.net >= 0;
+
+    const lines = [
+      { label: f.month,           value: null,          color: textMain()   },
+      { label: 'Income',          value: fmt(f.income), color: INCOME_COLOR  },
+      { label: 'Expense',         value: fmt(f.expense),color: EXPENSE_COLOR },
+      { label: 'Net',             value: (NET_POSITIVE ? '+' : '') + fmt(f.net),
+        color: NET_POSITIVE ? INCOME_COLOR : EXPENSE_COLOR },
+    ];
+
+    const FONT_SIZE  = 12;
+    const LINE_H     = 20;
+    const PAD_X      = 12;
+    const PAD_Y      = 10;
+    const TIP_W      = 148;
+    const TIP_H      = PAD_Y * 2 + LINE_H * lines.length;
+    const RADIUS     = 8;
+
+    // Position: prefer right of cursor, flip left near edge
+    let tx = x + 14;
+    if (tx + TIP_W > W - 4) tx = x - TIP_W - 14;
+    let ty = pad.top + 4;
+    if (ty + TIP_H > H - pad.bottom) ty = H - pad.bottom - TIP_H - 4;
+
+    // Shadow
+    ctx.save();
+    ctx.shadowColor   = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur    = 16;
+    ctx.shadowOffsetY = 4;
+
+    // Box
+    ctx.beginPath();
+    ctx.moveTo(tx + RADIUS, ty);
+    ctx.lineTo(tx + TIP_W - RADIUS, ty);
+    ctx.quadraticCurveTo(tx + TIP_W, ty, tx + TIP_W, ty + RADIUS);
+    ctx.lineTo(tx + TIP_W, ty + TIP_H - RADIUS);
+    ctx.quadraticCurveTo(tx + TIP_W, ty + TIP_H, tx + TIP_W - RADIUS, ty + TIP_H);
+    ctx.lineTo(tx + RADIUS, ty + TIP_H);
+    ctx.quadraticCurveTo(tx, ty + TIP_H, tx, ty + TIP_H - RADIUS);
+    ctx.lineTo(tx, ty + RADIUS);
+    ctx.quadraticCurveTo(tx, ty, tx + RADIUS, ty);
+    ctx.closePath();
+    ctx.fillStyle = cardBg();
+    ctx.fill();
+    ctx.restore();
+
+    // Border
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(tx + RADIUS, ty);
+    ctx.lineTo(tx + TIP_W - RADIUS, ty);
+    ctx.quadraticCurveTo(tx + TIP_W, ty, tx + TIP_W, ty + RADIUS);
+    ctx.lineTo(tx + TIP_W, ty + TIP_H - RADIUS);
+    ctx.quadraticCurveTo(tx + TIP_W, ty + TIP_H, tx + TIP_W - RADIUS, ty + TIP_H);
+    ctx.lineTo(tx + RADIUS, ty + TIP_H);
+    ctx.quadraticCurveTo(tx, ty + TIP_H, tx, ty + TIP_H - RADIUS);
+    ctx.lineTo(tx, ty + RADIUS);
+    ctx.quadraticCurveTo(tx, ty, tx + RADIUS, ty);
+    ctx.closePath();
+    ctx.strokeStyle = gridColor();
+    ctx.lineWidth   = 1;
+    ctx.stroke();
+    ctx.restore();
+
+    // Text rows
+    ctx.save();
+    ctx.font = `${FONT_SIZE}px 'DM Sans', sans-serif`;
+    lines.forEach((row, i) => {
+      const rowY = ty + PAD_Y + i * LINE_H + FONT_SIZE * 0.85;
+      if (row.value === null) {
+        // Month header — bold, centered
+        ctx.font      = `700 13px 'DM Sans', sans-serif`;
+        ctx.fillStyle = textMain();
+        ctx.textAlign = 'center';
+        ctx.fillText(row.label, tx + TIP_W / 2, rowY);
+        ctx.font      = `${FONT_SIZE}px 'DM Sans', sans-serif`;
+      } else {
+        // Color dot
+        ctx.beginPath();
+        ctx.arc(tx + PAD_X + 4, rowY - 3.5, 4, 0, Math.PI * 2);
+        ctx.fillStyle = row.color;
+        ctx.fill();
+        // Label
+        ctx.fillStyle = textSec();
+        ctx.textAlign = 'left';
+        ctx.fillText(row.label, tx + PAD_X + 14, rowY);
+        // Value — right-aligned
+        ctx.fillStyle = row.color;
+        ctx.textAlign = 'right';
+        ctx.font      = `600 ${FONT_SIZE}px 'DM Sans', sans-serif`;
+        ctx.fillText(row.value, tx + TIP_W - PAD_X, rowY);
+        ctx.font      = `${FONT_SIZE}px 'DM Sans', sans-serif`;
+      }
+    });
+    ctx.restore();
+  }
+
+  // ── Mouse event: snap to nearest data point ───────────────
+  function onMouseMove(e) {
+    const rect = canvas.getBoundingClientRect();
+    const mx   = e.clientX - rect.left;
+    // Find closest data index
+    let closest = 0, minDist = Infinity;
+    flow.forEach((_, i) => {
+      const d = Math.abs(xOf(i) - mx);
+      if (d < minDist) { minDist = d; closest = i; }
+    });
+    // Only activate inside the chart area (with a small buffer)
+    if (mx < pad.left - 8 || mx > W - pad.right + 8) {
+      drawBase();
+    } else {
+      canvas.style.cursor = 'crosshair';
+      drawHover(closest);
+    }
+  }
+
+  function onMouseLeave() {
+    canvas.style.cursor = '';
+    drawBase();
+  }
+
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mouseleave', onMouseLeave);
+
+  // Initial render
+  drawBase();
 }
 
 function renderBreakdown() {
@@ -346,6 +698,7 @@ export function renderTransactions() {
     t.description?.toLowerCase().includes(search) ||
     t.categories?.name?.toLowerCase().includes(search)
   );
+  console.log('Raw txList length:', txList.length);
 
   if (!txList.length) {
     container.innerHTML = `<div class="empty-state">
@@ -364,6 +717,7 @@ export function renderTransactions() {
           <th>Type</th>
           <th>Amount</th>
           <th>Status</th>
+          <th>Notes</th>
         </tr>
       </thead>
       <tbody>
@@ -401,6 +755,11 @@ function txRow(tx) {
       ${isIncome ? '+' : '-'}${fmt(tx.amount)}
     </td>
     <td><span class="status-badge ${getStatusClass(tx.status)}">${tx.status}</span></td>
+    <td style="font-size:13px;color:var(--text-muted);max-width:160px">
+      ${tx.notes
+        ? `<span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px" title="${tx.notes.replace(/"/g,'&quot;')}">${tx.notes}</span>`
+        : `<span style="color:var(--border)">—</span>`}
+    </td>
   </tr>`;
 }
 

@@ -116,10 +116,18 @@ export function drawLineChart(canvas, datasets, labels, options = {}) {
 
 export function drawBarChart(canvas, values, labels, colors, options = {}) {
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+
+  // Clone to remove stale listeners
+  const fresh = canvas.cloneNode(true);
+  canvas.parentNode?.replaceChild(fresh, canvas);
+  canvas = fresh;
+  // Preserve the original id
+  if (options.id) canvas.id = options.id;
+
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth, H = canvas.offsetHeight;
   canvas.width  = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
 
   const pad = { top: 10, right: 8, bottom: 24, left: 40 };
@@ -130,52 +138,139 @@ export function drawBarChart(canvas, values, labels, colors, options = {}) {
   const gap  = pw / n;
 
   const maxV = Math.max(...values, 1);
-  const style = getComputedStyle(document.documentElement);
-  const textColor   = style.getPropertyValue('--text-muted').trim();
-  const borderColor = style.getPropertyValue('--border').trim();
+  const css = prop => getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
 
-  // Grid
-  ctx.strokeStyle = borderColor;
-  ctx.lineWidth = 1;
-  [0, .5, 1].forEach(t => {
-    const y = pad.top + ph * (1 - t);
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + pw, y); ctx.stroke();
-    ctx.fillStyle = textColor;
-    ctx.font = '10px DM Sans, sans-serif';
-    ctx.textAlign = 'right';
-    const v = maxV * t;
-    ctx.fillText(v >= 1000 ? '$'+(v/1000).toFixed(1)+'k' : '$'+v.toFixed(0), pad.left - 4, y + 3);
-  });
+  function drawBars(hoverIdx = -1) {
+    ctx.clearRect(0, 0, W, H);
 
-  values.forEach((v, i) => {
-    const x = pad.left + i * gap + (gap - barW) / 2;
-    const bh = (v / maxV) * ph;
-    const y  = pad.top + ph - bh;
+    const textColor   = css('--text-muted');
+    const borderColor = css('--border');
+    const cardBg      = css('--bg-card');
 
-    // Rounded top bar
-    const r = Math.min(6, barW / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + barW - r, y);
-    ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
-    ctx.lineTo(x + barW, y + bh);
-    ctx.lineTo(x, y + bh);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
+    // Grid lines
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    [0, .5, 1].forEach(t => {
+      const y = pad.top + ph * (1 - t);
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + pw, y); ctx.stroke();
+      ctx.fillStyle = textColor;
+      ctx.font = '10px DM Sans, sans-serif';
+      ctx.textAlign = 'right';
+      const v = maxV * t;
+      ctx.fillText(v >= 1000 ? '$'+(v/1000).toFixed(1)+'k' : '$'+v.toFixed(0), pad.left - 4, y + 3);
+    });
 
-    if (options.highlight === i) {
-      ctx.fillStyle = colors[i] || '#FF4444';
-    } else {
-      ctx.fillStyle = (colors[i] || '#FF4444') + '55';
+    values.forEach((v, i) => {
+      const x  = pad.left + i * gap + (gap - barW) / 2;
+      const bh = (v / maxV) * ph;
+      const y  = pad.top + ph - bh;
+      const r  = Math.min(6, barW / 2);
+      const isHighlight = options.highlight === i;
+      const isHover     = i === hoverIdx;
+
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + barW - r, y);
+      ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+      ctx.lineTo(x + barW, y + bh);
+      ctx.lineTo(x, y + bh);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+
+      const base = colors[i] || '#FF4444';
+      ctx.fillStyle = (isHighlight || isHover) ? base : base + '55';
+      ctx.fill();
+
+      // X label
+      ctx.fillStyle = isHover ? css('--text-primary') : textColor;
+      ctx.font = isHover ? '500 10px DM Sans, sans-serif' : '10px DM Sans, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(labels[i], x + barW / 2, H - 4);
+
+      // ── Hover tooltip above bar ──────────────────────────
+      if (isHover && bh > 0) {
+        const label = '$' + v.toLocaleString();
+        ctx.font = '600 11px DM Sans, sans-serif';
+        const tw = ctx.measureText(label).width;
+        const TW = tw + 16, TH = 22, TR = 5;
+        const tx = x + barW / 2 - TW / 2;
+        const ty = Math.max(pad.top - 4, y - TH - 8);
+
+        // Shadow + box
+        ctx.save();
+        ctx.shadowColor   = 'rgba(0,0,0,0.15)';
+        ctx.shadowBlur    = 10;
+        ctx.shadowOffsetY = 3;
+        ctx.beginPath();
+        ctx.moveTo(tx + TR, ty);
+        ctx.lineTo(tx + TW - TR, ty);
+        ctx.quadraticCurveTo(tx + TW, ty, tx + TW, ty + TR);
+        ctx.lineTo(tx + TW, ty + TH - TR);
+        ctx.quadraticCurveTo(tx + TW, ty + TH, tx + TW - TR, ty + TH);
+        ctx.lineTo(tx + TR, ty + TH);
+        ctx.quadraticCurveTo(tx, ty + TH, tx, ty + TH - TR);
+        ctx.lineTo(tx, ty + TR);
+        ctx.quadraticCurveTo(tx, ty, tx + TR, ty);
+        ctx.closePath();
+        ctx.fillStyle = cardBg;
+        ctx.fill();
+        ctx.restore();
+
+        // Border
+        ctx.beginPath();
+        ctx.moveTo(tx + TR, ty);
+        ctx.lineTo(tx + TW - TR, ty);
+        ctx.quadraticCurveTo(tx + TW, ty, tx + TW, ty + TR);
+        ctx.lineTo(tx + TW, ty + TH - TR);
+        ctx.quadraticCurveTo(tx + TW, ty + TH, tx + TW - TR, ty + TH);
+        ctx.lineTo(tx + TR, ty + TH);
+        ctx.quadraticCurveTo(tx, ty + TH, tx, ty + TH - TR);
+        ctx.lineTo(tx, ty + TR);
+        ctx.quadraticCurveTo(tx, ty, tx + TR, ty);
+        ctx.closePath();
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth   = 1;
+        ctx.stroke();
+
+        // Text
+        ctx.fillStyle = base;
+        ctx.textAlign = 'center';
+        ctx.fillText(label, tx + TW / 2, ty + TH / 2 + 4);
+
+        // Small caret line down to bar
+        ctx.beginPath();
+        ctx.setLineDash([2, 2]);
+        ctx.strokeStyle = base + '88';
+        ctx.lineWidth   = 1;
+        ctx.moveTo(x + barW / 2, ty + TH);
+        ctx.lineTo(x + barW / 2, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
+  }
+
+  function getHoverIndex(mx) {
+    for (let i = 0; i < values.length; i++) {
+      const x = pad.left + i * gap + (gap - barW) / 2;
+      if (mx >= x - 4 && mx <= x + barW + 4) return i;
     }
-    ctx.fill();
+    return -1;
+  }
 
-    ctx.fillStyle = textColor;
-    ctx.font = '10px DM Sans, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(labels[i], x + barW / 2, H - 4);
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    canvas.style.cursor = 'pointer';
+    drawBars(getHoverIndex(e.clientX - rect.left));
   });
+  canvas.addEventListener('mouseleave', () => {
+    canvas.style.cursor = '';
+    drawBars();
+  });
+
+  drawBars();
+  return canvas; // return in case caller needs the new node reference
 }
 
 export function drawDonutChart(canvas, segments, options = {}) {
