@@ -28,14 +28,20 @@ export async function loadDashboardData() {
   ] = await Promise.all([
     Accounts.list(user.id),
     Categories.list(user.id),
-    Transactions.list(user.id, { limit: 20 }),
+    Transactions.list(user.id, { limit: 20 }),   // returns raw array
     Transactions.last6MonthsCashFlow(user.id),
     Transactions.spendingByCategory(user.id, year, month),
     Budgets.list(user.id)
   ]);
 
-  const balance = (accounts || []).reduce((s, a) => s + Number(a.balance), 0);
+  // Transactions.list() throws on error and returns raw array — wrap safely
+  const txList = Array.isArray(txData) ? txData : [];
+
   const { income, expense } = await Transactions.monthlyStats(user.id, year, month);
+  // Derive balance from all transactions (account.balance is not auto-updated by DB)
+  const allIncome  = txList.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+  const allExpense = txList.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+  const balance = allIncome - allExpense;
 
   // Spending breakdown
   const catTotals = {};
@@ -54,15 +60,32 @@ export async function loadDashboardData() {
 
   State.set('accounts', accounts || []);
   State.set('categories', categories || []);
-  State.set('transactions', txData || []);  // already correct, just needs txData to be right
+  State.set('transactions', txList);
   State.set('cashFlow', cashFlow || []);
   State.set('spendingBreakdown', breakdown);
   State.set('budgets', budgets || []);
   State.set('stats', { balance, income, expense, savings: balance * 0.114 });
 }
 
+// ── Module-level container ref + one-time refresh listener ───
+let _dashContainer = null;
+
+window.addEventListener('data:refresh', async () => {
+  if (!_dashContainer) return;
+  await loadDashboardData();
+
+  // Surgical updates — no full innerHTML wipe, no flicker
+  patchStatCards();
+  renderCharts();
+  renderTransactions();
+  renderBudget();
+  renderBreakdown();
+});
+
 // ── Render Dashboard ──────────────────────────────────────────
-export function renderDashboard(container) {
+export async function renderDashboard(container) {
+  _dashContainer = container;
+  await loadDashboardData();
   container.innerHTML = dashboardHTML();
   bindDashboard();
   renderCharts();
@@ -70,9 +93,30 @@ export function renderDashboard(container) {
   renderBudget();
   renderBreakdown();
 }
+function computeStats() {
+  // Use the stats already computed by loadDashboardData (monthly figures + full balance)
+  return State.get('stats') || { balance: 0, income: 0, expense: 0, savings: 0 };
+}
+
+// ── Patch stat card values in-place (no DOM wipe = no flicker) ─
+function patchStatCards() {
+  const s = computeStats();
+  const profile = State.get('profile');
+  const cards = _dashContainer.querySelectorAll('.stat-card');
+  if (!cards.length) return;
+
+  const patches = [
+    { el: cards[0]?.querySelector('h2'), val: fmt(s.balance) },
+    { el: cards[1]?.querySelector('h2'), val: fmtShort(s.income) },
+    { el: cards[2]?.querySelector('h2'), val: fmtShort(s.expense) },
+    { el: cards[3]?.querySelector('h2'), val: fmtShort(s.savings) },
+    { el: cards[3]?.querySelector('.stat-badge'), val: `Goal: ${fmt(profile?.savings_goal || 5000)}` },
+  ];
+  patches.forEach(({ el, val }) => { if (el && el.textContent !== val) el.textContent = val; });
+}
 
 function dashboardHTML() {
-  const s = State.get('stats');
+  const s = computeStats();
   const profile = State.get('profile');
 
   return `
@@ -202,7 +246,7 @@ function statCard(label, value, sub, trend, color, icon, chartId) {
 function bindDashboard() {
   // Add transaction
   document.getElementById('add-tx-btn')?.addEventListener('click', () => openTransactionModal());
-
+  document.getElementById('add-tx-hbtn')?.addEventListener('click', () => openTransactionModal());
   // Filter tabs
   document.querySelectorAll('.filter-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -221,15 +265,6 @@ function bindDashboard() {
       renderTransactions();
     }, 250));
   }
-
-  // Listen for data refresh
-  window.addEventListener('data:refresh', async () => {
-  await loadDashboardData();
-  renderCharts();
-  renderTransactions();
-  renderBudget();
-  renderBreakdown();
-});  
 }
 
 // ── Render Charts ─────────────────────────────────────────────
@@ -263,7 +298,7 @@ function renderCharts() {
     drawBarChart(cfc,
       flow.map(f => f.net),
       labels,
-      flow.map(() => '#FF4444'),
+      flow.map(() => '#FF7900 '),
       { highlight: flow.length - 1 }
     );
   }
@@ -311,7 +346,6 @@ export function renderTransactions() {
     t.description?.toLowerCase().includes(search) ||
     t.categories?.name?.toLowerCase().includes(search)
   );
-  console.log('Raw txList length:', txList.length);
 
   if (!txList.length) {
     container.innerHTML = `<div class="empty-state">
