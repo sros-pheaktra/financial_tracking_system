@@ -69,7 +69,7 @@ export async function loadDashboardData() {
     balance:  balance - savingsDeposit,
     income,
     expense,
-    savings: savingsDeposit
+    savings:  (balance * 0.114) + savingsDeposit
   });
 }
 
@@ -94,6 +94,7 @@ export async function renderDashboard(container) {
   await loadDashboardData();
   container.innerHTML = dashboardHTML();
   bindDashboard();
+  patchStatCards();
   renderCharts();
   renderTransactions();
   renderBudget();
@@ -119,6 +120,28 @@ function patchStatCards() {
     { el: cards[3]?.querySelector('.stat-badge'), val: `Goal: ${fmt(profile?.savings_goal || 5000)}` },
   ];
   patches.forEach(({ el, val }) => { if (el && el.textContent !== val) el.textContent = val; });
+
+  // ── Goal-met overlay ──────────────────────────────────────────
+  const goal    = profile?.savings_goal || 5000;
+  const overlay = document.getElementById('savings-goal-overlay');
+  if (!overlay) return;
+
+  const goalMet = s.savings >= goal;
+  const wasShown = overlay.style.display === 'flex';
+
+  if (goalMet) {
+    const amountEl = document.getElementById('savings-goal-amount');
+    if (amountEl) amountEl.textContent = fmt(s.savings);
+    if (!wasShown) {
+      // Re-trigger animations by forcing a reflow
+      overlay.style.display = 'flex';
+      overlay.style.animation = 'none';
+      overlay.offsetHeight; // reflow
+      overlay.style.animation = '';
+    }
+  } else {
+    overlay.style.display = 'none';
+  }
 }
 
 function dashboardHTML() {
@@ -261,13 +284,13 @@ function dashboardHTML() {
 
 function statCard(label, value, sub, trend, color, icon, chartId, showSaveBtn = false) {
   return `
-  <div class="stat-card">
+  <div class="stat-card" id="${showSaveBtn ? 'savings-stat-card' : ''}" style="position:relative;overflow:hidden">
     <div class="stat-card-header">
       <p>${label}</p>
       <div class="stat-icon" style="background:${color}22;color:${color}">${icon}</div>
     </div>
-    <h2>${value}</h2>
-    <span class="stat-badge ${trend}">${sub}</span>
+    <h2 id="${showSaveBtn ? 'savings-value' : ''}">${value}</h2>
+    <span class="stat-badge ${trend}" id="${showSaveBtn ? 'savings-badge' : ''}">${sub}</span>
     ${showSaveBtn ? `
     <button id="add-savings-btn" style="
       margin-top:10px;width:100%;height:32px;
@@ -279,6 +302,42 @@ function statCard(label, value, sub, trend, color, icon, chartId, showSaveBtn = 
       Add Savings
     </button>` : ''}
     <canvas class="mini-chart" id="${chartId}" style="width:100%;height:44px;display:block;margin-top:${showSaveBtn ? '8px' : '0'}"></canvas>
+    ${showSaveBtn ? `
+    <!-- Goal-met celebration overlay — hidden until savings >= goal -->
+    <div id="savings-goal-overlay" style="
+      display:none;position:absolute;inset:0;
+      background:linear-gradient(135deg,#78350f 0%,#92400e 40%,#d97706 100%);
+      border-radius:inherit;padding:14px 16px 12px;
+      flex-direction:column;align-items:center;justify-content:center;gap:6px;
+      text-align:center;animation:savingsGoalIn 0.5s cubic-bezier(.22,1,.36,1) both">
+      <div style="font-size:28px;line-height:1;animation:savingsBounce 0.6s 0.3s both">🎉</div>
+      <div style="font-size:13px;font-weight:800;color:#fef3c7;letter-spacing:0.04em;text-transform:uppercase">Goal Reached!</div>
+      <div id="savings-goal-amount" style="font-size:20px;font-weight:900;color:#fff;font-family:var(--font-display)"></div>
+      <div style="font-size:11px;color:#fde68a;line-height:1.4;max-width:160px">
+        You've hit your savings target. Amazing work! 🏆
+      </div>
+      <div style="
+        margin-top:4px;width:100%;height:4px;border-radius:4px;
+        background:rgba(255,255,255,0.2);overflow:hidden">
+        <div style="width:100%;height:100%;background:#fff;border-radius:4px;
+          animation:savingsBar 1s 0.5s cubic-bezier(.22,1,.36,1) both;transform-origin:left"></div>
+      </div>
+    </div>
+    <style>
+      @keyframes savingsGoalIn {
+        from { opacity:0; transform:scale(0.92); }
+        to   { opacity:1; transform:scale(1); }
+      }
+      @keyframes savingsBounce {
+        0%   { transform:scale(0) rotate(-15deg); }
+        60%  { transform:scale(1.3) rotate(8deg); }
+        100% { transform:scale(1) rotate(0deg); }
+      }
+      @keyframes savingsBar {
+        from { transform:scaleX(0); }
+        to   { transform:scaleX(1); }
+      }
+    </style>` : ''}
   </div>`;
 }
 
