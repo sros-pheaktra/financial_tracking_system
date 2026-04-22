@@ -12,7 +12,6 @@ export function initTransactionModal() {
   overlay = document.getElementById('tx-modal');
   form    = document.getElementById('tx-form');
 
-  // Type toggle
   overlay.querySelectorAll('.type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       activeType = btn.dataset.type;
@@ -30,14 +29,19 @@ export function openTransactionModal(txData = null) {
   editId = txData?.id ?? null;
   overlay.querySelector('.modal-title').textContent = editId ? 'Edit Transaction' : 'Add Transaction';
 
-  // Populate accounts
+  // Populate accounts — FIXED: guard against missing/empty accounts
   const accountSel = form.querySelector('#tx-account');
-  accountSel.innerHTML = State.get('accounts')
-    .map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  const accounts = State.get('accounts') || [];
+  if (accounts.length === 0) {
+    accountSel.innerHTML = '<option value="" disabled selected>No accounts found</option>';
+  } else {
+    accountSel.innerHTML = accounts
+      .map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  }
 
   // Populate categories
   const catSel = form.querySelector('#tx-category');
-  const cats = State.get('categories');
+  const cats = State.get('categories') || [];
   catSel.innerHTML = cats
     .filter(c => c.type === 'expense')
     .map(c => `<option value="${c.id}">${c.icon || ''} ${c.name}</option>`).join('');
@@ -52,15 +56,16 @@ export function openTransactionModal(txData = null) {
       if (txData.account_id) {
         form.querySelector('#tx-account').value = txData.account_id;
       }
-
       if (txData.category_id) {
         form.querySelector('#tx-category').value = txData.category_id;
+      }
+      if (txData.payment_method) {
+        form.querySelector('#tx-payment-method').value = txData.payment_method;
       }
     });
 
     activeType = txData.type;
-  }
-  else {
+  } else {
     form.reset();
     form.querySelector('#tx-date').value = today();
     activeType = 'expense';
@@ -86,15 +91,16 @@ async function handleSubmit(e) {
 
   const user = State.get('user');
   const payload = {
-    user_id:     user.id,
-    account_id:  form.querySelector('#tx-account').value,
-    category_id: form.querySelector('#tx-category').value || null,
-    type:        activeType,
-    amount:      parseFloat(form.querySelector('#tx-amount').value),
-    description: form.querySelector('#tx-desc').value,
-    date:        form.querySelector('#tx-date').value,
-    notes:       form.querySelector('#tx-notes').value || null,
-    status:      'completed'
+    user_id:        user.id,
+    account_id:     form.querySelector('#tx-account').value,
+    category_id:    form.querySelector('#tx-category').value || null,
+    type:           activeType,
+    amount:         parseFloat(form.querySelector('#tx-amount').value),
+    description:    form.querySelector('#tx-desc').value,
+    date:           form.querySelector('#tx-date').value,
+    notes:          form.querySelector('#tx-notes').value || null,
+    payment_method: form.querySelector('#tx-payment-method').value,
+    status:         'completed'
   };
 
   const { error } = editId
@@ -109,7 +115,6 @@ async function handleSubmit(e) {
   } else {
     toast(editId ? 'Transaction updated!' : 'Transaction added!', 'success');
     closeModal();
-    // Trigger dashboard refresh
     window.dispatchEvent(new CustomEvent('data:refresh'));
   }
 }
@@ -148,9 +153,16 @@ export function transactionModalHTML() {
             <input id="tx-date" type="date" required />
           </div>
           <div class="form-group">
-            <label>Account</label>
-            <select id="tx-account"></select>
+            <label>Payment Method</label>
+            <select id="tx-payment-method" required>
+              <option value="cash">Cash</option>
+              <option value="digital">Digital Payment</option>
+            </select>
           </div>
+        </div>
+        <div class="form-group" style="display: none">
+          <label>Account</label>
+          <select id="tx-account" required></select>
         </div>
         <div class="form-group">
           <label>Category</label>

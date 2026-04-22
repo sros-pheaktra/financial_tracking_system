@@ -214,7 +214,7 @@ function dashboardHTML() {
           <div><h3>Income vs Expenses</h3><p>6-month overview</p></div>
           <select class="period-select" id="cashflow-period">
             <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
+            <option value="weekly">Weekly</option>
           </select>
         </div>
         <canvas id="income-expense-chart" style="width:100%;height:200px;display:block;margin-top:8px"></canvas>
