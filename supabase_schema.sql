@@ -195,7 +195,7 @@ BEGIN
   INSERT INTO accounts (user_id, name, type, balance)
   VALUES (
     NEW.id,
-    'Cash',
+    name,
     'cash',
     0
   );

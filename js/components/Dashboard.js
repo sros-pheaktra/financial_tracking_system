@@ -147,7 +147,6 @@ function patchStatCards() {
 function dashboardHTML() {
   const s = computeStats();
   const profile = State.get('profile');
-  console.log(s)
 
   return `
   <div class="page">
@@ -240,7 +239,7 @@ function dashboardHTML() {
         <div class="donut-wrap" style="width:140px;height:140px;position:relative;margin:16px auto 10px">
           <canvas id="donut-chart"></canvas>
           <div class="donut-label">
-            <strong>100%</strong><span>Total</span>
+            <strong id="expenses-donut">
           </div>
         </div>
         <div class="breakdown-legend" id="breakdown-legend"></div>
@@ -726,8 +725,19 @@ function drawIncomeExpenseChart(canvas, flow) {
 }
 
 function renderBreakdown() {
-  const segments = State.get('spendingBreakdown');
+  const segments = State.get('spendingBreakdown') || [];
+  const stats = computeStats(); // ✅ get stats object
   const canvas = document.getElementById('donut-chart');
+
+  // ✅ Update donut center label (use expense, not income)
+  const donutLabel = document.getElementById('expenses-donut');
+  if (donutLabel) {
+    donutLabel.textContent = `$${stats.expense.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  }
+
   if (canvas && segments.length) {
     drawDonutChart(canvas, segments);
   }
@@ -739,9 +749,11 @@ function renderBreakdown() {
         <div class="legend-color" style="background:${s.color}"></div>
         <span>${s.name}</span>
         <span class="legend-pct">${s.pct}%</span>
-      </div>`).join('');
+      </div>
+    `).join('');
   }
 }
+
 
 // ── Render Transactions ───────────────────────────────────────
 export function renderTransactions() {
@@ -757,7 +769,6 @@ export function renderTransactions() {
     t.description?.toLowerCase().includes(search) ||
     t.categories?.name?.toLowerCase().includes(search)
   );
-  console.log('Raw txList length:', txList.length);
 
   if (!txList.length) {
     container.innerHTML = `<div class="empty-state">
@@ -881,4 +892,4 @@ const svgIcon = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
 const dollarIcon  = () => svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>');
 const trendUpIcon = () => svgIcon('<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>');
 const trendDownIcon = () => svgIcon('<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>');
-const piggyIcon = () => svgIcon(`   <!-- Body -->   <ellipse cx="12" cy="13" rx="9" ry="6"/>    <!-- Ear -->   <polygon points="7,7 9,3 11,7"/>    <!-- Eye -->   <circle cx="15" cy="12" r="0.8"/>    <!-- Snout -->   <circle cx="19" cy="14" r="2"/>   <circle cx="18.5" cy="14" r="0.4"/>   <circle cx="19.5" cy="14" r="0.4"/>    <!-- Legs -->   <rect x="7" y="18" width="1.5" height="2"/>   <rect x="13" y="18" width="1.5" height="2"/>    <!-- Tail -->   <path d="M3 13 q-2 2 1 3"/>    <!-- Dollar Sign -->   <text x="12" y="15" text-anchor="middle" font-size="10" font-weight="bold">$</text> `);
+const piggyIcon   = () => svgIcon('<path d="M19 6A7 7 0 0 0 5 6c-2 0-3 1-3 3 0 3 4 8 5 9h10c1-1 5-6 5-9 0-2-1-3-3-3Z"/><path d="M9 12h.01M15 12h.01"/>');

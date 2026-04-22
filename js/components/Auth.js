@@ -102,7 +102,7 @@ function bindAuth(onSuccess) {
 
     if (error) toast(error.message, 'error');
     else {
-      toast('Account created! Check your email to confirm.', 'success');
+      toast('Account created!', 'success');
       document.getElementById('signup-form').style.display = 'none';
       document.getElementById('login-form').style.display  = 'block';
     }

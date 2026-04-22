@@ -2,7 +2,6 @@
 // js/components/Topbar.js
 // ============================================================
 import { State }   from '../utils/state.js';
-
 const PAGE_TITLES = {
   dashboard: 'Dashboard',
   accounts:  'Accounts',
@@ -12,10 +11,20 @@ const PAGE_TITLES = {
   settings:  'Settings'
 };
 
-export function renderTopbar(container) {
+export function renderTopbar(container, navigate) {
   container.innerHTML = topbarHTML();
-  bindTopbar();
+
+  document.getElementById('user-avatar')?.addEventListener('click', () => {
+  const current = State.get('currentPage');
+
+  if (current === 'settings') {
+    navigate('dashboard'); // or previous page if you prefer
+  } else {
+    navigate('settings');
+  }
+});
 }
+
 
 function topbarHTML() {
   const now     = new Date();

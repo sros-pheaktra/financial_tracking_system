@@ -42,7 +42,7 @@ async function boot() {
     ${transactionModalHTML()}`;
 
   renderSidebar(document.getElementById('sidebar-root'), navigate);
-  renderTopbar(document.getElementById('topbar-root'));
+  renderTopbar(document.getElementById('topbar-root'), navigate);
   initTransactionModal();
 
   await navigate('dashboard');
@@ -102,13 +102,16 @@ function pageStub(title, desc) {
     <p style="color:var(--text-muted);font-size:14px;max-width:320px">${desc}<br><br>Connect Supabase and this section will be populated automatically.</p>
   </div>`;
 }
+function refreshUI() {
+  renderTopbar(document.getElementById('topbar-root'));
+}
 
 function renderSettings(container) {
   const profile = State.get('profile');
   const user    = State.get('user');
 
   container.innerHTML = `
-  <div class="page">
+  <div class="page" style="display: flex; justify-content: center">
     <div style="max-width:560px">
       <div class="chart-card" style="margin-bottom:16px">
         <h3 style="margin-bottom:18px">Profile Settings</h3>
@@ -123,11 +126,11 @@ function renderSettings(container) {
         <div class="form-row">
           <div class="form-group">
             <label>Monthly Budget ($)</label>
-            <input id="s-budget" type="number" value="${profile?.monthly_budget || 6000}" />
+            <input id="s-budget" type="number" value="${profile?.monthly_budget || 0}" />
           </div>
           <div class="form-group">
             <label>Savings Goal ($)</label>
-            <input id="s-goal" type="number" value="${profile?.savings_goal || 5000}" />
+            <input id="s-goal" type="number" value="${profile?.savings_goal || 0}" />
           </div>
         </div>
         <button class="btn btn-primary" id="save-profile-btn">Save Changes</button>
@@ -148,6 +151,7 @@ function renderSettings(container) {
     else {
       State.set('profile', data);
       toast('Profile saved!', 'success');
+      refreshUI()
     }
   });
 }
