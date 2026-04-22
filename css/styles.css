@@ -667,19 +667,152 @@ td { padding: 13px 22px; font-size: 14px; }
 }
 
 /* ─── Responsive ──────────────────────────────────────────── */
+
+/* --- Tablet landscape (≤1200px) --- */
 @media (max-width: 1200px) {
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid  { grid-template-columns: repeat(2, 1fr); }
   .chart-grid { grid-template-columns: 1fr 1fr; }
   .chart-grid > *:last-child { grid-column: 1 / -1; }
 }
+
+/* --- Tablet portrait (≤900px) --- */
 @media (max-width: 900px) {
+  .chart-grid  { grid-template-columns: 1fr; }
+  .bottom-grid { grid-template-columns: 1fr; }
+
+  /* Shrink table padding so rows breathe on mid-size screens */
+  thead th,
+  td { padding-left: 16px; padding-right: 16px; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Mobile (≤768px) — sidebar becomes an off-canvas drawer
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* ── Sidebar: hidden off-screen by default ── */
+  .sidebar {
+    width: var(--sidebar-w-exp);   /* full label width when open */
+    transform: translateX(-100%);
+    transition: transform var(--transition-slow),
+                background var(--transition-slow),
+                border-color var(--transition-slow);
+    z-index: 300;
+  }
+  /* JS should toggle .sidebar--open on the element */
+  .sidebar--open {
+    transform: translateX(0);
+  }
+  /* Disable hover-expand on touch — it conflicts with the drawer */
+  .sidebar:hover { width: var(--sidebar-w-exp); }
+  .sidebar--open .nav-item span { opacity: 1; }
+
+  /* ── Scrim / overlay behind open sidebar ── */
+  .sidebar-scrim {
+    display: block;
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, .45);
+    backdrop-filter: blur(2px);
+    z-index: 299;
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--transition);
+  }
+  .sidebar--open ~ .sidebar-scrim,
+  .sidebar-scrim--visible {
+    opacity: 1; pointer-events: auto;
+  }
+
+  /* ── Main content: no longer indented by sidebar ── */
+  .main { margin-left: 0; }
+
+  /* ── Topbar: show hamburger, tighten padding ── */
+  .topbar { padding: 0 16px; }
+  .topbar-title h1 { font-size: 17px; }
+  .topbar-title p  { display: none; }
+
+  /* Hamburger button — hidden on desktop, shown on mobile.
+     Add <button class="hamburger-btn"> to your HTML topbar. */
+  .hamburger-btn {
+    display: flex;
+    align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .hamburger-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  .search-bar { display: none; }   /* move search inside a sheet or modal on mobile */
+
+  /* ── Grids: single column ── */
+  .stat-grid  { grid-template-columns: 1fr 1fr; }  /* 2-up still works on 768 */
   .chart-grid { grid-template-columns: 1fr; }
   .bottom-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 640px) {
-  .stat-grid { grid-template-columns: 1fr 1fr; }
+
+  /* ── Content area: reduce padding ── */
   .content { padding: 16px; }
-  .topbar  { padding: 0 16px; }
-  .sidebar { width: var(--sidebar-w); }
-  .search-bar { display: none; }
+
+  /* ── Table: allow horizontal scroll on mobile ── */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table { min-width: 600px; }
+
+  /* ── Modal: full-screen sheet on mobile ── */
+  .modal-overlay { align-items: flex-end; }
+  .modal {
+    max-width: 100%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: 24px 20px 32px;    /* extra bottom padding for home-indicator */
+    transform: translateY(100%);
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  /* ── Toast: full-width at bottom ── */
+  .toast-container {
+    bottom: 16px;
+    right: 12px;
+    left: 12px;
+  }
+  .toast { min-width: unset; width: 100%; }
+
+  /* ── Auth card: no side padding on very small viewports ── */
+  .auth-card { padding: 28px 20px; }
+
+  /* ── Transactions header: stack on small screens ── */
+  .transactions-header { flex-direction: column; align-items: flex-start; }
+  .filter-tabs { flex-wrap: wrap; }
+  .transactions-search { width: 100%; }
+  .transactions-search input { width: 100%; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Small mobile (≤480px)
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .stat-grid { grid-template-columns: 1fr; }
+
+  .stat-card h2 { font-size: 22px; }
+
+  /* Tighter table cells */
+  thead th,
+  td { padding-left: 12px; padding-right: 12px; font-size: 13px; }
+
+  .topbar-actions .icon-btn:not(:last-child) { display: none; } /* keep only the last action (avatar) */
+
+  .form-row { grid-template-columns: 1fr; } /* stack form pairs */
+
+  .breakdown-legend { grid-template-columns: 1fr; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Desktop: ensure hamburger is hidden
+   ───────────────────────────────────────────────────────────── */
+@media (min-width: 769px) {
+  .hamburger-btn  { display: none; }
+  .sidebar-scrim  { display: none !important; }
 }
