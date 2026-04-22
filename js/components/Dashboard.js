@@ -155,12 +155,12 @@ function dashboardHTML() {
     <div class="stat-grid">
       ${statCard('Total Balance', fmt(s.balance), '+8% from last month', 'up',
         '#6366F1', dollarIcon(), 'balance-chart')}
-      ${statCard('Monthly Income', fmtShort(s.income), 'Stable growth', 'up',
+      ${statCard('Monthly Income', fmt(s.income), 'Stable growth', 'up',
         '#10B981', trendUpIcon(), 'income-chart')}
-      ${statCard('Monthly Expenses', fmtShort(s.expense), '-3% reduced spending', 'down',
+      ${statCard('Monthly Expenses', fmt(s.expense), '-3% reduced spending', 'down',
         '#F43F5E', trendDownIcon(), 'expense-chart')}
-      ${statCard('Savings Growth', fmtShort(s.savings),
-        `Goal: ${fmt(profile?.savings_goal || 5000)}`, 'neutral',
+      ${statCard('Savings Growth', fmt(s.savings),
+        `Goal: ${fmt(profile?.savings_goal || 0)}`, 'neutral',
         '#F59E0B', piggyIcon(), 'savings-chart', true)}
     </div>
 
