@@ -14,16 +14,19 @@ const PAGE_TITLES = {
 export function renderTopbar(container, navigate) {
   container.innerHTML = topbarHTML();
 
-  document.getElementById('user-avatar')?.addEventListener('click', () => {
-  const current = State.get('currentPage');
+  bindTopbar(); // ✅ ADD THIS
 
-  if (current === 'settings') {
-    navigate('dashboard'); // or previous page if you prefer
-  } else {
-    navigate('settings');
-  }
-});
+  document.getElementById('user-avatar')?.addEventListener('click', () => {
+    const current = State.get('currentPage');
+
+    if (current === 'settings') {
+      navigate('dashboard');
+    } else {
+      navigate('settings');
+    }
+  });
 }
+
 
 
 function topbarHTML() {

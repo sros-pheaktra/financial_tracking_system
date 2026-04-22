@@ -44,19 +44,38 @@ export async function loadDashboardData() {
   const balance = allIncome - allExpense;
 
   // Spending breakdown
-  const catTotals = {};
-  (spendCats || []).forEach(t => {
+  const hasData = spendCats && spendCats.length > 0;
+
+const catTotals = {};
+
+if (hasData) {
+  spendCats.forEach(t => {
     const name = t.categories?.name || 'Others';
     catTotals[name] = (catTotals[name] || 0) + Number(t.amount);
   });
-  const totalSpend = Object.values(catTotals).reduce((s, v) => s + v, 0) || 1;
-  const breakdown  = Object.entries(catTotals)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, value]) => ({
-      name, value,
-      pct: Math.round((value / totalSpend) * 100),
-      color: spendCats?.find(t => t.categories?.name === name)?.categories?.color || '#607D8B'
-    }));
+}
+
+// fallback data so donut always renders
+const fallback = [
+  { name: 'Loading...', value: 1, color: '#607D8B', pct: 100 }
+];
+
+const totalSpend =
+  Object.values(catTotals).reduce((s, v) => s + v, 0) || 1;
+
+const breakdown = hasData
+  ? Object.entries(catTotals)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({
+        name,
+        value,
+        pct: Math.round((value / totalSpend) * 100),
+        color:
+          spendCats.find(t => t.categories?.name === name)?.categories?.color ||
+          '#607D8B'
+      }))
+  : fallback;
+
 
   State.set('accounts', accounts || []);
   State.set('categories', categories || []);
