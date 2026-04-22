@@ -401,7 +401,27 @@ h1, h2, h3, h4, h5 {
 .transactions-search input { border: none; background: transparent; font-family: var(--font-body); font-size: 13px; color: var(--text-primary); outline: none; width: 140px; }
 .transactions-search input::placeholder { color: var(--text-muted); }
 
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+  scroll-behavior: smooth;
+  max-height: 400px;   /* adjust based on your layout */
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-top: 1px solid var(--border);
+}
+.table-wrap thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  z-index: 1;
+}
+/* nicer scrollbar (webkit only) */
+.table-wrap::-webkit-scrollbar {
+  width: 6px;
+}
+.table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+}
 table { width: 100%; border-collapse: collapse; }
 thead th {
   padding: 10px 22px;
