@@ -114,15 +114,15 @@ function patchStatCards() {
 
   const patches = [
     { el: cards[0]?.querySelector('h2'), val: fmt(s.balance) },
-    { el: cards[1]?.querySelector('h2'), val: fmtShort(s.income) },
-    { el: cards[2]?.querySelector('h2'), val: fmtShort(s.expense) },
-    { el: cards[3]?.querySelector('h2'), val: fmtShort(s.savings) },
-    { el: cards[3]?.querySelector('.stat-badge'), val: `Goal: ${fmt(profile?.savings_goal || 5000)}` },
+    { el: cards[1]?.querySelector('h2'), val: fmt(s.income) },
+    { el: cards[2]?.querySelector('h2'), val: fmt(s.expense) },
+    { el: cards[3]?.querySelector('h2'), val: fmt(s.savings) },
+    { el: cards[3]?.querySelector('.stat-badge'), val: `Goal: ${fmt(profile?.savings_goal || 0)}` },
   ];
   patches.forEach(({ el, val }) => { if (el && el.textContent !== val) el.textContent = val; });
 
   // ── Goal-met overlay ──────────────────────────────────────────
-  const goal    = profile?.savings_goal || 5000;
+  const goal    = profile?.savings_goal || 0;
   const overlay = document.getElementById('savings-goal-overlay');
   if (!overlay) return;
 
@@ -830,7 +830,7 @@ function renderBudget() {
   const profile = State.get('profile');
   const stats   = State.get('stats');
   const budgets = State.get('budgets');
-  const totalBudget = profile?.monthly_budget || 6000;
+  const totalBudget = profile?.monthly_budget || 0;
   const used    = stats.expense;
   const usedPct = pct(used, totalBudget);
 
@@ -881,4 +881,4 @@ const svgIcon = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
 const dollarIcon  = () => svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>');
 const trendUpIcon = () => svgIcon('<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>');
 const trendDownIcon = () => svgIcon('<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>');
-const piggyIcon   = () => svgIcon('<path d="M19 6A7 7 0 0 0 5 6c-2 0-3 1-3 3 0 3 4 8 5 9h10c1-1 5-6 5-9 0-2-1-3-3-3Z"/><path d="M9 12h.01M15 12h.01"/>');
+const piggyIcon = () => svgIcon(`   <!-- Body -->   <ellipse cx="12" cy="13" rx="9" ry="6"/>    <!-- Ear -->   <polygon points="7,7 9,3 11,7"/>    <!-- Eye -->   <circle cx="15" cy="12" r="0.8"/>    <!-- Snout -->   <circle cx="19" cy="14" r="2"/>   <circle cx="18.5" cy="14" r="0.4"/>   <circle cx="19.5" cy="14" r="0.4"/>    <!-- Legs -->   <rect x="7" y="18" width="1.5" height="2"/>   <rect x="13" y="18" width="1.5" height="2"/>    <!-- Tail -->   <path d="M3 13 q-2 2 1 3"/>    <!-- Dollar Sign -->   <text x="12" y="15" text-anchor="middle" font-size="10" font-weight="bold">$</text> `);

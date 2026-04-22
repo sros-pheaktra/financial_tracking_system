@@ -2,8 +2,8 @@
    FinTrack — Design System & Variables
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@200..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,100..900;1,100..900&display=swap');
+
 
 
 /* ─── Light Theme ─────────────────────────────────────────── */
@@ -57,8 +57,8 @@
   --transition:    0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 
-  --font-display:  'Oswald', sans-serif;
-  --font-body:     'DM Sans', sans-serif;
+  --font-display:  'Jost', sans-serif;
+  --font-body:     'Jost', sans-serif;
 }
 
 /* ─── Dark Theme ──────────────────────────────────────────── */
