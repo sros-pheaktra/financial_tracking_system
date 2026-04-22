@@ -522,7 +522,7 @@ function drawIncomeExpenseChart(canvas, flow) {
       ctx.lineWidth   = 1;
       ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + pw, y); ctx.stroke();
       ctx.restore();
-      const label = v === 0 ? '0k' : v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + 'k' : v.toFixed(0);
+      const label = v === 0 ? '0' : v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + 'k' : v.toFixed(0);
       ctx.fillText(label, pad.left - 6, y + 4);
     });
     ctx.restore();
