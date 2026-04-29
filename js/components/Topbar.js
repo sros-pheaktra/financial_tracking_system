@@ -14,7 +14,7 @@ const PAGE_TITLES = {
 export function renderTopbar(container, navigate) {
   container.innerHTML = topbarHTML();
 
-  bindTopbar(); // ✅ ADD THIS
+  bindTopbar();
 
   document.getElementById('user-avatar')?.addEventListener('click', () => {
     const current = State.get('currentPage');
@@ -33,12 +33,13 @@ function topbarHTML() {
   const now     = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const profile = State.get('profile');
+  const fullName = profile.full_name || 'there';
   const initials = (profile?.full_name || 'JL').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   return `
   <header class="topbar" id="topbar">
     <div class="topbar-title">
-      <h1 id="page-title">Dashboard</h1>
+      <h1>Hello ${fullName},</h1>
       <p>${dateStr}</p>
     </div>
     <div class="topbar-actions">

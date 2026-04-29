@@ -836,10 +836,8 @@ function txRow(tx) {
         </div>
       </div>
     </td>
-    <td style="color:var(--text-secondary);font-size:13px">${fmtDate(tx.date, { month: 'short', day: 'numeric' })}</td>
-    <td style="color:var(--text-secondary);font-size:13px;text-transform:capitalize">
-      ${isIncome ? '↓ Receive' : '↑ Send'}
-    </td>
+    <td style="color:var(--text-secondary);font-size:13px"> ${fmtDate(tx.date, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} </td>
+    <td> <span style=" display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:500; background:${isIncome ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'}; color:${isIncome ? '#22c55e' : '#ef4444'}; "> ${isIncome ? '↓ Receive' : '↑ Send'} </span> </td>
     <td class="amount-cell ${isIncome ? 'income' : 'expense'}">
       ${isIncome ? '+' : '-'}${fmt(tx.amount)}
     </td>
