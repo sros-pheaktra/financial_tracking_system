@@ -6,7 +6,7 @@ import { fmt, fmtShort, fmtDate, fmtDateTime, pct, progressClass, getStatusClass
                     from '../utils/helpers.js';
 import { drawLineChart, drawBarChart, drawDonutChart, drawMiniLine }
                     from './Charts.js';
-import { Transactions, Accounts, Categories, Budgets } from '../services/supabase.js';
+import { Transactions, Accounts, Categories, Budgets, SavingsGoals } from '../services/supabase.js';
 import { openTransactionModal } from './TransactionModal.js';
 import { toast }    from './Toast.js';
 
@@ -24,14 +24,16 @@ export async function loadDashboardData() {
     txData,
     cashFlow,
     { data: spendCats },
-    { data: budgets }
+    { data: budgets },
+    { data: savingsGoals }
   ] = await Promise.all([
     Accounts.list(user.id),
     Categories.list(user.id),
     Transactions.list(user.id, { limit: 20 }),   // returns raw array
     Transactions.last6MonthsCashFlow(user.id),
     Transactions.spendingByCategory(user.id, year, month),
-    Budgets.list(user.id)
+    Budgets.list(user.id),
+    SavingsGoals.list(user.id)
   ]);
 
   // Transactions.list() throws on error and returns raw array — wrap safely
@@ -76,19 +78,26 @@ const breakdown = hasData
       }))
   : fallback;
 
-
+  
   State.set('accounts', accounts || []);
   State.set('categories', categories || []);
   State.set('transactions', txList);
   State.set('cashFlow', cashFlow || []);
   State.set('spendingBreakdown', breakdown);
   State.set('budgets', budgets || []);
-  const savingsDeposit = State.get('savingsDeposit') || 0;
+  State.set('savingsGoals', savingsGoals || []);
+
+  // Compute real savings figures from the savings_goals table
+  const goals = savingsGoals || [];
+  const totalSaved  = goals.reduce((s, g) => s + Number(g.current_amount || 0), 0);
+  const totalTarget = goals.reduce((s, g) => s + Number(g.target_amount  || 0), 0);
+
   State.set('stats', {
-    balance:  balance - savingsDeposit,
+    balance: balance,
     income,
     expense,
-    savings: savingsDeposit
+    savings:       totalSaved,
+    savingsTarget: totalTarget,
   });
 }
 
@@ -127,32 +136,36 @@ function computeStats() {
 // ── Patch stat card values in-place (no DOM wipe = no flicker) ─
 function patchStatCards() {
   const s = computeStats();
-  const profile = State.get('profile');
   const cards = _dashContainer.querySelectorAll('.stat-card');
   if (!cards.length) return;
+
+  const savingsPct = s.savingsTarget > 0
+    ? Math.min(100, Math.round((s.savings / s.savingsTarget) * 100))
+    : 0;
 
   const patches = [
     { el: cards[0]?.querySelector('h2'), val: fmt(s.balance) },
     { el: cards[1]?.querySelector('h2'), val: fmt(s.income) },
     { el: cards[2]?.querySelector('h2'), val: fmt(s.expense) },
     { el: cards[3]?.querySelector('h2'), val: fmt(s.savings) },
-    { el: cards[3]?.querySelector('.stat-badge'), val: `Goal: ${fmt(profile?.savings_goal || 0)}` },
+    { el: cards[3]?.querySelector('.stat-badge'),
+      val: s.savingsTarget > 0
+        ? `${savingsPct}% of ${fmt(s.savingsTarget)} goal`
+        : 'No goals set yet' },
   ];
   patches.forEach(({ el, val }) => { if (el && el.textContent !== val) el.textContent = val; });
 
   // ── Goal-met overlay ──────────────────────────────────────────
-  const goal    = profile?.savings_goal || 0;
   const overlay = document.getElementById('savings-goal-overlay');
   if (!overlay) return;
 
-  const goalMet = s.savings >= goal;
+  const goalMet  = s.savingsTarget > 0 && s.savings >= s.savingsTarget;
   const wasShown = overlay.style.display === 'flex';
 
   if (goalMet) {
     const amountEl = document.getElementById('savings-goal-amount');
     if (amountEl) amountEl.textContent = fmt(s.savings);
     if (!wasShown) {
-      // Re-trigger animations by forcing a reflow
       overlay.style.display = 'flex';
       overlay.style.animation = 'none';
       overlay.offsetHeight; // reflow
@@ -178,22 +191,38 @@ function dashboardHTML() {
       ${statCard('Monthly Expenses', fmt(s.expense), '', 'down',
         '#F43F5E', trendDownIcon(), 'expense-chart')}
       ${statCard('Savings Growth', fmt(s.savings),
-        `Goal: ${fmt(profile?.savings_goal || 0)}`, '',
+        s.savingsTarget > 0
+          ? `${Math.min(100, Math.round((s.savings / s.savingsTarget) * 100))}% of ${fmt(s.savingsTarget)} goal`
+          : 'No goals set yet',
+        '',
         '#F59E0B', piggyIcon(), 'savings-chart', true)}
     </div>
 
     <!-- Add Savings Modal -->
     <div id="savings-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
-      <div style="background:var(--bg-card);border-radius:16px;padding:28px 28px 24px;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.25)">
+      <div style="background:var(--bg-card);border-radius:16px;padding:28px 28px 24px;width:360px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.25)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
           <div>
-            <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin:0">Add to Savings</h3>
-            <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0">Amount will be moved from your balance</p>
+            <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin:0">Add to Savings Goal</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0">Contribute toward one of your savings goals</p>
           </div>
-          <button id="savings-modal-close" style="background:var(--bg-page);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px;color:var(--text-secondary);display:flex;align-items:center;justify-content:center">&times;</button>
+          <button id="savings-modal-close" style="background:var(--bg-input);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px;color:var(--text-secondary);display:flex;align-items:center;justify-content:center">&times;</button>
+        </div>
+        <div id="savings-goal-selector-wrap" style="margin-bottom:14px">
+          <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">Goal</label>
+          <select id="savings-goal-select" style="width:100%;height:42px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:14px;padding:0 12px;outline:none;cursor:pointer">
+            ${(State.get('savingsGoals') || [])
+              .filter(g => g.status !== 'completed')
+              .map(g => {
+                const pctDone = g.target_amount > 0
+                  ? Math.min(100, Math.round((Number(g.current_amount) / Number(g.target_amount)) * 100))
+                  : 0;
+                return `<option value="${g.id}">${g.icon || '🎯'} ${g.name} — ${pctDone}% saved</option>`;
+              }).join('') || '<option disabled>No active goals</option>'}
+          </select>
         </div>
         <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">Amount</label>
-        <div style="display:flex;align-items:center;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg-page)">
+        <div style="display:flex;align-items:center;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg-input)">
           <span style="padding:0 12px;font-size:15px;color:var(--text-muted);border-right:1.5px solid var(--border);height:42px;display:flex;align-items:center">$</span>
           <input id="savings-amount-input" type="number" min="0" placeholder="0.00"
             style="flex:1;border:none;outline:none;background:transparent;padding:0 12px;height:42px;font-size:15px;font-family:var(--font-display);color:var(--text-primary)" />
@@ -373,6 +402,19 @@ function bindDashboard() {
   function openSavingsModal() {
     if (input)   input.value = '';
     if (errorEl) errorEl.textContent = '';
+    // Refresh the goal selector with the latest goals from State
+    const goalSelect = document.getElementById('savings-goal-select');
+    if (goalSelect) {
+      const activeGoals = (State.get('savingsGoals') || []).filter(g => g.status !== 'completed');
+      goalSelect.innerHTML = activeGoals.length
+        ? activeGoals.map(g => {
+            const pctDone = g.target_amount > 0
+              ? Math.min(100, Math.round((Number(g.current_amount) / Number(g.target_amount)) * 100))
+              : 0;
+            return `<option value="${g.id}">${g.icon || '🎯'} ${g.name} — ${pctDone}% saved</option>`;
+          }).join('')
+        : '<option disabled>No active goals — create one on the Goals page</option>';
+    }
     if (overlay) { overlay.style.display = 'flex'; input?.focus(); }
   }
   function closeSavingsModal() {
@@ -384,26 +426,53 @@ function bindDashboard() {
   document.getElementById('savings-modal-cancel')?.addEventListener('click', closeSavingsModal);
   overlay?.addEventListener('click', e => { if (e.target === overlay) closeSavingsModal(); });
 
-  document.getElementById('savings-modal-confirm')?.addEventListener('click', () => {
+  document.getElementById('savings-modal-confirm')?.addEventListener('click', async () => {
     const val = parseFloat(input?.value);
-    const stats = State.get('stats') || {};
     if (!val || val <= 0) {
       if (errorEl) errorEl.textContent = 'Please enter a valid amount.';
       return;
     }
-    if (val > stats.balance) {
-      if (errorEl) errorEl.textContent = 'Amount exceeds available balance.';
+
+    // Identify which goal to contribute to
+    const goals       = State.get('savingsGoals') || [];
+    const activeGoals = goals.filter(g => g.status !== 'completed');
+
+    if (activeGoals.length === 0) {
+      if (errorEl) errorEl.textContent = 'No active savings goals. Create one on the Goals page.';
       return;
     }
-    const prev = State.get('savingsDeposit') || 0;
-    State.set('savingsDeposit', prev + val);
-    closeSavingsModal();
-    // Refresh stats + cards
-    loadDashboardData().then(() => {
-      patchStatCards();
-      renderCharts();
+
+    // Use goal selector if rendered, else pick the first active goal
+    const goalSelectEl = document.getElementById('savings-goal-select');
+    const goalId = goalSelectEl?.value || activeGoals[0].id;
+    const goal   = goals.find(g => g.id === goalId);
+    if (!goal) { if (errorEl) errorEl.textContent = 'Goal not found.'; return; }
+
+    const confirmBtn = document.getElementById('savings-modal-confirm');
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Saving…'; }
+
+    const newAmount = Number(goal.current_amount) + val;
+    const newStatus = newAmount >= Number(goal.target_amount) ? 'completed' : goal.status;
+    const { error } = await SavingsGoals.update(goalId, {
+      current_amount: newAmount,
+      status: newStatus
     });
-    toast?.success?.(`$${val.toLocaleString()} moved to savings!`);
+
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm'; }
+
+    if (error) {
+      if (errorEl) errorEl.textContent = error.message;
+      return;
+    }
+
+    closeSavingsModal();
+    await loadDashboardData();
+    patchStatCards();
+    renderCharts();
+    const msg = newStatus === 'completed'
+      ? `🎉 Goal "${goal.name}" completed!`
+      : `$${val.toLocaleString()} added to "${goal.name}"!`;
+    toast(msg, 'success');
   });
   // Filter tabs
   document.querySelectorAll('.filter-tab').forEach(btn => {
@@ -461,8 +530,10 @@ function renderCharts() {
   drawMiniLine(document.getElementById('balance-chart'),  incomeData, '#6366F1');
   drawMiniLine(document.getElementById('income-chart'),   incomeData, '#10B981');
   drawMiniLine(document.getElementById('expense-chart'),  expenseData, '#F43F5E');
+  // Use real total saved across all goals for the savings sparkline
+  const totalSaved = (State.get('savingsGoals') || []).reduce((s, g) => s + Number(g.current_amount || 0), 0);
   drawMiniLine(document.getElementById('savings-chart'),
-    incomeData.map(v => v * 0.114), '#F59E0B');
+    incomeData.map(() => totalSaved), '#F59E0B');
 }
 
 // ── Income vs Expenses Chart — with hover tooltip & crosshair ─
@@ -857,10 +928,23 @@ function renderBudget() {
 
   const profile = State.get('profile');
   const stats   = State.get('stats');
-  const budgets = State.get('budgets');
-  const totalBudget = profile?.monthly_budget || 0;
-  const used    = stats.expense;
-  const usedPct = pct(used, totalBudget);
+  const budgets = State.get('budgets') || [];
+  const txList = State.get('transactions') || [];
+
+  const totalBudget = budgets.reduce(
+    (sum, b) => sum + Number(b.amount || 0),
+    0
+  );
+
+  const used = txList
+    .filter(t => t.type === 'expense')
+    .reduce((s, t) => s + Number(t.amount), 0);
+
+  const usedPct =
+    totalBudget > 0
+      ? Math.min(100, Math.round((used / totalBudget) * 100))
+      : 0;
+
 
   let html = `
     <div class="budget-overall">
@@ -877,28 +961,43 @@ function renderBudget() {
   if (budgets.length) {
     html += `<div class="budget-items">`;
     budgets.forEach(b => {
-      const cat   = b.categories;
-      const bUsed = stats.expense * 0.2; // simplified
-      const bPct  = pct(bUsed, b.amount);
+      const cat = b.categories;
+
+      const bUsed = txList
+        .filter(t =>
+          t.type === 'expense' &&
+          t.category_id === b.category_id
+        )
+        .reduce((s, t) => s + Number(t.amount), 0);
+
+      const bPct = b.amount > 0
+        ? Math.min(100, Math.round((bUsed / b.amount) * 100))
+        : 0;
+
       html += `
-      <div class="budget-item-row">
-        <div class="budget-item-icon" style="background:${cat?.color || '#eee'}22">
-          ${cat?.icon || '📦'}
-        </div>
-        <div class="budget-item-info">
-          <div class="budget-item-head">
-            <span class="budget-item-name">${b.name}</span>
-            <span class="budget-item-amt">${fmt(bUsed)} / ${fmt(b.amount)}</span>
+        <div class="budget-item-row">
+          <div class="budget-item-icon" style="background:${cat?.color || '#eee'}22">
+            ${cat?.icon || '📦'}
           </div>
-          <div class="progress-track sm">
-            <div class="progress-fill ${progressClass(bPct)}" style="width:${bPct}%"></div>
+
+          <div class="budget-item-info">
+            <div class="budget-item-head">
+              <span class="budget-item-name">${cat?.name || 'Unknown'}</span>
+              <span class="budget-item-amt">${fmt(bUsed)} / ${fmt(b.amount)}</span>
+            </div>
+
+            <div class="progress-track sm">
+              <div class="progress-fill ${progressClass(bPct)}" style="width:${bPct}%"></div>
+            </div>
           </div>
-        </div>
-      </div>`;
+        </div>`;
     });
+
     html += `</div>`;
   } else {
-    html += `<p style="font-size:13px;color:var(--text-muted);margin-top:16px;text-align:center">No budgets set yet.</p>`;
+    html += `<p style="font-size:13px;color:var(--text-muted);margin-top:16px;text-align:center">
+      No budgets set yet.
+    </p>`;
   }
 
   el.innerHTML = html;

@@ -7,7 +7,9 @@ import { renderAuth }     from './components/Auth.js';
 import { renderSidebar }  from './components/Sidebar.js';
 import { renderTopbar, updatePageTitle } from './components/Topbar.js';
 import { renderDashboard, loadDashboardData } from './components/Dashboard.js';
+import { renderBudget,    loadBudgetData }    from './components/Budget.js';
 import { initTransactionModal, transactionModalHTML } from './components/TransactionModal.js';
+import { renderGoals, loadGoalsData } from './components/Goals.js'; 
 
 // ── Boot ──────────────────────────────────────────────────────
 async function boot() {
@@ -68,21 +70,14 @@ async function navigate(page) {
       await loadDashboardData();
       renderDashboard(content);
       break;
-
-    case 'accounts':
-      content.innerHTML = pageStub('Accounts', 'Manage your bank accounts, wallets, and cards.');
-      break;
-
-    case 'analytics':
-      content.innerHTML = pageStub('Analytics', 'Deep dive into your spending patterns and trends.');
-      break;
-
     case 'budgets':
-      content.innerHTML = pageStub('Budget Planner', 'Set and track monthly budgets per category.');
+      await loadBudgetData();
+      renderBudget(content);
       break;
 
-    case 'goals':
-      content.innerHTML = pageStub('Savings Goals', 'Create and track your savings targets.');
+    case 'goals':                         
+      await loadGoalsData();
+      renderGoals(content);
       break;
 
     case 'settings':

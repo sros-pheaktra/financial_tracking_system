@@ -99,16 +99,28 @@ CREATE INDEX idx_transactions_account    ON transactions(account_id);
 -- ─────────────────────────────────────────────
 CREATE TABLE budgets (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id       UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  category_id   UUID REFERENCES categories(id) ON DELETE CASCADE,
-  name          TEXT NOT NULL,
-  amount        NUMERIC(12,2) NOT NULL,
-  period        TEXT NOT NULL DEFAULT 'monthly' CHECK (period IN ('weekly','monthly','yearly')),
-  start_date    DATE NOT NULL,
+
+  user_id       UUID NOT NULL 
+                REFERENCES profiles(id) ON DELETE CASCADE,
+
+  category_id   UUID NOT NULL 
+                REFERENCES categories(id) ON DELETE CASCADE,
+
+  amount        NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+
+  period        TEXT NOT NULL DEFAULT 'monthly'
+                CHECK (period IN ('weekly','monthly','yearly')),
+
+  start_date    DATE NOT NULL DEFAULT CURRENT_DATE,
   end_date      DATE,
-  alert_at_pct  INT DEFAULT 80,    -- send alert when usage hits this %
+
+  alert_at_pct  INT DEFAULT 80 CHECK (alert_at_pct BETWEEN 1 AND 100),
+
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  -- ✅ Prevent duplicate budgets per category per user
+  UNIQUE(user_id, category_id)
 );
 
 -- ─────────────────────────────────────────────

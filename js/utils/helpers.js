@@ -42,10 +42,15 @@ export function el(tag, cls, content = '') {
   return e;
 }
 
-export function pct(used, total) {
-  if (!total) return 0;
-  return Math.min(100, Math.round((used / total) * 100));
+export function pct(part, total) {
+  const p = Number(part) || 0;
+  const t = Number(total) || 0;
+  if (t <= 0) return 0;
+
+  return Number(((p / t) * 100).toFixed(1)); // 0.3%
 }
+
+
 
 export function progressClass(pct) {
   if (pct >= 90) return 'danger';

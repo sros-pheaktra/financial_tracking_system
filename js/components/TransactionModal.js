@@ -116,6 +116,8 @@ async function handleSubmit(e) {
     toast(editId ? 'Transaction updated!' : 'Transaction added!', 'success');
     closeModal();
     window.dispatchEvent(new CustomEvent('data:refresh'));
+    // After successfully adding/updating/deleting a transaction:
+    window.dispatchEvent(new CustomEvent('data:changed', { detail: { type: 'transactions' } }));
   }
 }
 
